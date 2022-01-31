@@ -13,3 +13,11 @@ Para contribuir com o desenvolvimento de revisões sistemáticas nas Ciências S
 1. Levantamento de currículos de pesquisadores que trabalham sobre o tema de interesse (extração de dados na plataforma Lattes e Google Scholar);
 2. Levantamento de artigos nas principais revistas da área;
 2. Processamento de artigos publicados com método Prisma (Preferred Reporting Items for Systematic Reviews and Meta-Analyses).
+
+Outras iniciativas e programas interessantes:
+Pacote rscielo, programado por Fernando Meireles, Denisson Silva e Rogério Barbosa
+Mendley, Zootero e Calibre - softwares de gestão bibliográfica
+VOSviewer - para construir e visualizar redes bibliométricas
+ 
+Quer contribuir no projeto? Não hesite em entrar em contato comigo!
+Conhece outros softwares e metodologias para revisão de literatura e síntese de evidências? Compartilhe!
