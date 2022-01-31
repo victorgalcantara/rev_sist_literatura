@@ -1,0 +1,247 @@
+---
+title: "Extração dados autores"
+author: "Victor G Alcantara"
+date: "27/01/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Revisão sistemática de literatura
+## Parte 1: dados de pesquisadores brasileiros
+
+A revisão de literatura é uma etapa fundamental em qualquer pesquisa. Em 2021 a Nature publicou um artigo ressaltando o valor da síntese de evidências e encorajando submissões de revisões sistemáticas e meta-análises:
+
+_Science is a cumulative enterprise, and systematic evidence synthesis is invaluable for appraising what is known and what is not known on a specific research question. We strongly encourage the submission of systematic reviews and meta-analyses to Nature Human Behaviour._
+
+E ainda destaca sobre as Ciências Sociais:
+
+_Although systematic evidence synthesis has a more recent history in the social sciences, it is now a cornerstone of assessing research evidence on societally relevant questions to inform policy._
+
+Mas afinal de contas, como fazer uma revisão sistemática e sintetizar uma imensidão de trabalhos e evidências?
+
+Para contribuir com o desenvolvimento de revisões sistemáticas nas Ciências Sociais (e em qualquer outra área), este script apresenta a construção de algoritmos para que operacionalizam duas técnicas:
+
+1. Levantamento de currículos de pesquisadores que trabalham sobre o tema (extração na plataforma Lattes e Google Scholar)
+
+2. Processamento de artigos publicados pelo método Prisma (Preferred Reporting Items for Systematic Reviews and Meta-Analyses).
+
+## Técnica 1: Levantamento de currículos de pesquisadores que trabalham sobre o tema (extração na plataforma Lattes e Google Scholar)
+
+Para começar a revisão sistemática, faremos uma coleta de nomes de pesquisadores brasileiros cujos currículos possuem as palavras-chave da área de pesquisa que estamos interessados.
+
+### 1º Passo: coletando os nomes
+
+Acessar a plataforma Lattes e fazer uma busca de currículos avançada. Na plataforma Lattes, o caminho é: buscar de currículos > Busca avançada > expressão booleana.
+
+A expressão booleana é uma estrutura lógica. Utilizamos aspas para as palavras utilizadas e as condições "AND" e "OR" para relacioná-las.
+
+Neste exercício, faremos um levantamento de pesquisadores que tratam sobre Sociologia da educação e desigualdades educacionais. Para isso, utilizamos: "sociologia" AND "educação" AND "desigualdades"
+
+Nas opções avançadas de filtro disponibilizadas, filtramos por "doutores" e "brasileiros" e tivemos 2308 resultados.
+
+A página de resultados padrão do Lattes é apresentada de 10 em 10 (em nosso caso, 230 páginas). Para ler todos os resultados de uma única vez, é possível alterar a apresentação dos resultados pelo endereço de URL, na parte "PaginaResultados&registros=0;10". Observe que, por padrão, está de 0-10. Para apresentar todos basta alterar para a quantidade de resultados que deseja (no nosso caso, de 0;2308).
+
+Assim, temos a seguinte url: "http://buscatextual.cnpq.br/buscatextual/busca.do?metodo=forwardPaginaResultados&registros=0;2308&query=%2Bidx_assunto%3A%22educacao%22+%2Bidx_assunto%3A%22sociologia%22+%2Bidx_assunto%3A%22desigualdades%22+%2Bidx_particao%3A1+%2Bidx_nacionalidade%3Ab+^500&analise=cv&tipoOrdenacao=null&paginaOrigem=index.do&mostrarScore=true&mostrarBandeira=true&modoIndAdhoc=null"
+
+Você pode acessar com a mesma URL, mas os resultados podem mudar por atualizações de currículos. Acessamos em 27/01/2022 às 11h20.
+
+Com a URL de base, vamos colocar a mão na massa!
+
+O primeiro problema encontrado é que não conseguimos um caminho dentro da plataforma Lattes que redirecione da página de resultados de pesquisadores ao currículo de cada um (a plataforma impede o acesso de robôs com os bloqueios "CAPTCHA").
+
+Para contornar o problema, guardamos apenas os nomes dos pesquisadores e coletamos as informações bibliográficas pelo Google Scholar, que é mais intuitivo e tem os dados tabelados.
+
+"Raspamos" os nomes dos pesquisadores da seguinte forma:
+
+```{r}
+library(tidyverse)
+library(rvest)
+
+# Nossa URL de referência dos resultados do Lattes
+url_base <- "http://buscatextual.cnpq.br/buscatextual/busca.do?metodo=forwardPaginaResultados&registros=0;2308&query=%2Bidx_assunto%3A%22educacao%22+%2Bidx_assunto%3A%22sociologia%22+%2Bidx_assunto%3A%22desigualdades%22+%2Bidx_particao%3A1+%2Bidx_nacionalidade%3Ab+^500&analise=cv&tipoOrdenacao=null&paginaOrigem=index.do&mostrarScore=true&mostrarBandeira=true&modoIndAdhoc=null"
+
+# Lendo a estrutura html da página
+pag <- read_html(url_base)
+
+# navegando no documento: extraindo as tags "a" com os nomes
+tag_nomes   <- html_nodes(pag, xpath = "//li/b/a")
+
+# Extraindo nomes das tags <a>nome</a>
+nomes  <- html_text(tag_nomes, trim = T)
+
+nomes[1:5]
+```
+
+### 2º Passo 
+
+Agora com todos os nomes, vamos trabalhar no Google Scholar.
+
+Para pesquisas de nomes específicos no Google Scholar basta usar as aspas como especificadoras (assim ele vai induzir os resultados à exatamente ao que se pede dentro das aspas). Então entramos na busca por perfis registrados no scholar e pesquisamos os nomes em aspas duplas.
+
+PORÉM, as palavras são concatenadas no endereço URL pelo sinal "+", e para informar no método do google precisamos substituir os espaços entre os nomes pelo sinal de busca.
+
+```{r}
+nomes <- str_replace_all(nomes,pattern=" ",replacement="+")
+nomes[1:5]
+```
+
+Agora sim temos os nomes como precisamos.
+
+Vamos à busca pelos currículos no scholar pela URL!
+
+```{r}
+# Obtendo endereço URL
+# observe onde vai as palavras específicas de busca; basta substituir pelos nomes temos
+url_scholar <- paste0("https://scholar.google.com.br/citations?hl=pt-BR&view_op=search_authors&mauthors=%22",nomes[2],"%22&btnG=")
+
+url_scholar
+
+# Lendo a estrutura html da página
+url_scholar <- read_html(url_scholar)
+
+# Extraindo a o nó com o endereço da página do autor
+url_author   <- html_nodes(url_scholar, xpath = "//h3[@class='gs_ai_name']/a")
+link_author <- html_attr(url_author, name = "href")
+
+# Construindo o endereço URL da página do autor
+# Método: especificação scholar + endereço do autor
+link_author <- paste0("https://scholar.google.com.br/",link_author)
+
+# Lendo página do autor
+page_author <- read_html(link_author)
+
+# Estraindo informações tabeladas pelo Google
+lista_tabelas <- html_table(page_author, header = T)
+
+# Tabelas com informações
+lista_tabelas[[1]]
+
+head(lista_tabelas[[2]])
+```
+
+Agora temos quase tudo o que precisamos para começar um levantamento bibliográfico sistemático.
+
+O próximo passo é construir uma iteração busque, guarde e organize todas as informações dos autores.
+
+Vamos fazer o mesmo procedimento que fizemos para um autor e guardar apenas as informações que queremos.
+
+Porém, temos dois problemas que precisamos contornar:
+
+1. Nem todos os pesquisadores têm perfil no scholar. Em geral, os que não têm muitas publicações.
+
+2. Os nomes registrados no Lattes são completos, por cadastro, mas no scholar alguns podem estar só com o primeiro e o último nome.
+
+Para o segundo problema, construímos dois vetores, um com nomes completos e outro só com o primeiro e último nome. Assim, caso não encontre resultados pelo primeiro vetor, solicitamos ao R que tente pelo segundo.
+
+Se ainda assim não encontrar resultados, informamos ao software para pular os nomes quando der erro. Assim, além de pular quando não houver resultados, também irá pular caso apareça qualquer outro problema, sem que interrompa as iterações. Fazemos isso com uma comunicação um pouco complicada usando a função "tryCatch". Estamos falando: "tente pegar R, se não der tudo bem. Eu entendo. Vá para o próximo."
+
+```{r}
+# Construíndo segundo vetor com primeiro e último nome
+dummy <- strsplit(nomes,split = "+",fixed = T) # separa os nomes
+nomes.2=NULL # base para imputação do primeiro e último nome
+
+for (i in 1:length(nomes)){
+size = length(dummy[[i]]) # tamanho do nome
+nomes.2[i] <- paste0(dummy[[i]][1],"+",dummy[[i]][size]) # junte o primeiro com o último nome
+}
+```
+
+
+
+```{r}
+# Objeto onde guardaremos as informações
+pesq <- data.frame("nome"=NULL,"prof"=NULL,"instituicao"=NULL,
+              "chave_1"=NULL,"chave_2"=NULL,"chave_3"=NULL,"chave_4"=NULL,               "citacoes"=NULL,"IndiceH"=NULL,"IndiceI10"=NULL,
+              "citacoes_desde_2017"=NULL,"IndiceH>2017"=NULL,
+              "IndiceI10>2017"=NULL,"pubs"=NULL)
+pubs=NULL
+
+time_random <- abs(rnorm(2308,5,6))
+
+for(i in 1:length(nomes)){
+  ptm <- proc.time()
+  Sys.sleep(time_random[i]) # for request with a random time gap
+  
+tryCatch({
+  print(i)
+  print(nomes[i])
+  pesq[i,"nome"] <- nomes[i] # Guarde o nome para ter registrado na base
+  
+  url_scholar <- paste0("https://scholar.google.com.br/citations?hl=pt-BR&view_op=search_authors&mauthors=%22",nomes[i],"%22&btnG=")
+  
+  url_scholar <- read_html(url_scholar)
+  
+  url_author   <- html_nodes(url_scholar, xpath =     "//h3[@class='gs_ai_name']/a")
+  
+  link_author <- html_attr(url_author, name = "href")
+  
+  if(is_empty(link_author)){ # Se não tiver resultados no primeiro nome, espere um tempo e faça com o segundo vetor
+  print(nomes.2[i])
+  Sys.sleep(time_random[i])
+  url_scholar <- paste0("https://scholar.google.com.br/citations?hl=pt-BR&view_op=search_authors&mauthors=%22",nomes.2[i],"%22&btnG=")
+  
+  url_scholar <- read_html(url_scholar)
+  
+  url_author   <- html_nodes(url_scholar, xpath =     "//h3[@class='gs_ai_name']/a")
+  
+  link_author <- html_attr(url_author, name = "href")
+  }
+  
+  if(is_empty(link_author)){next} # Se não encontrar no segundo vetor também, pule para a próxima iteração.
+  
+  link_author <- paste0("https://scholar.google.com.br/",link_author)
+
+  page_author <- read_html(link_author)
+  
+  # Infos adicionais da page
+  tag_info1   <- html_nodes(page_author, xpath = "//div[@class='gsc_prf_il']")
+  tag_info2   <- html_nodes(page_author, xpath = "//div[@class='gsc_prf_il']/a")
+  info1      <- html_text(tag_info1, trim = T) %>% strsplit(.,split = ",")
+  info2      <- html_text(tag_info2, trim = T)
+  
+  # Tabelas com infos
+  lista_tabelas <- html_table(page_author, header = T)
+  
+  # Guardando infos
+  # Infos da page
+  
+  pesq[i,"prof"] <- info1[[1]][1]
+  pesq[i,"instituicao"] <- info1[[1]][2]
+  pesq[i,"chave_1"] <- info2[2]
+  pesq[i,"chave_2"] <- info2[3]
+  pesq[i,"chave_3"] <- info2[4]
+  pesq[i,"chave_4"] <- info2[5]
+  
+  # Infos tabeladas
+  pesq[i,"citacoes"]  <- lista_tabelas[[1]][1,2]
+  pesq[i,"IndiceH"]   <- lista_tabelas[[1]][2,2]
+  pesq[i,"IndiceI10"] <- lista_tabelas[[1]][3,2]
+  
+  
+  pesq[i,"citacoes_desde_2017"] <- lista_tabelas[[1]][1,3]
+  pesq[i,"IndiceH.2017"]        <- lista_tabelas[[1]][2,3]
+  pesq[i,"IndiceI10.2017"]      <- lista_tabelas[[1]][3,3]
+  pesq[i,"pubs"]      <- lista_tabelas[[2]]
+  
+  dummy <- lista_tabelas[[2]]
+  dummy$nome <- nomes[i]
+
+  pubs <- bind_rows(dummy,pubs)
+
+  
+  },
+  error=function(e){cat("ERROR :",conditionMessage(e), "\n")}
+  )
+  
+  rm(url_scholar,url_author,link_author,page_author,
+     tag_info1,tag_info2,info1,info2,lista_tabelas)
+  gc()
+print(proc.time() - ptm)  # The cpu usage should be negligible
+}
+
+# Error 429 após muitas requisições: ainda não resolvido
+
+load(pesq,pubs,file="rev_sistem_biblio.RDS")
+
+```
